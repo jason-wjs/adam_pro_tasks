@@ -1,8 +1,6 @@
 """Motion npz validation and normalization for Adam Pro tracking.
 
 Design note:
-- `TRACKING_BODY_NAMES` is intentionally a reduced subset used by
-  `MotionCommandCfg.body_names` (main locomotion/torso/arm chain).
 - Finger and neck bodies are intentionally excluded from tracking targets
   because they are currently not part of the active 29-DoF control objective.
 - Even with subset tracking targets, `body_*` arrays inside motion npz are

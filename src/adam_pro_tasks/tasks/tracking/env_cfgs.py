@@ -16,6 +16,26 @@ from adam_pro_tasks.tasks.tracking.motion_io import (
 )
 
 
+def _policy_obs_group_name(cfg: ManagerBasedRlEnvCfg) -> str:
+  if "policy" in cfg.observations:
+    return "policy"
+  if "actor" in cfg.observations:
+    return "actor"
+  raise KeyError("Expected observations to contain 'policy' or 'actor'.")
+
+
+def _remap_base_imu_sensors(cfg: ManagerBasedRlEnvCfg) -> None:
+  """Map base velocity observations to sensor names present in Adam Pro XML."""
+  for group_name in ("policy", "actor", "critic"):
+    if group_name not in cfg.observations:
+      continue
+    terms = cfg.observations[group_name].terms
+    if "base_lin_vel" in terms:
+      terms["base_lin_vel"].params["sensor_name"] = "robot/BodyVel"
+    if "base_ang_vel" in terms:
+      terms["base_ang_vel"].params["sensor_name"] = "robot/BodyGyro"
+
+
 def adam_pro_flat_tracking_env_cfg(play: bool = False) -> ManagerBasedRlEnvCfg:
   """Create Adam Pro flat terrain tracking configuration."""
   cfg = make_tracking_env_cfg()
@@ -43,6 +63,8 @@ def adam_pro_flat_tracking_env_cfg(play: bool = False) -> ManagerBasedRlEnvCfg:
   motion_cmd.anchor_body_name = TRACKING_ANCHOR_BODY
   motion_cmd.body_names = TRACKING_BODY_NAMES
 
+  _remap_base_imu_sensors(cfg)
+
   cfg.events["foot_friction"].params[
     "asset_cfg"
   ].geom_names = r"^(left|right)_foot[1-5]_collision$"
@@ -59,7 +81,8 @@ def adam_pro_flat_tracking_env_cfg(play: bool = False) -> ManagerBasedRlEnvCfg:
 
   if play:
     cfg.episode_length_s = int(1e9)
-    cfg.observations["policy"].enable_corruption = False
+    policy_group = _policy_obs_group_name(cfg)
+    cfg.observations[policy_group].enable_corruption = False
     cfg.events.pop("push_robot", None)
     motion_cmd.pose_range = {}
     motion_cmd.velocity_range = {}

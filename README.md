@@ -16,6 +16,13 @@ uv run list_envs
 # Play velocity task
 uv run play Mjlab-Velocity-Flat-Adam-Pro --agent zero
 
-# Train tracking task (requires motion artifact)
-uv run train Mjlab-Tracking-Flat-Adam-Pro --registry-name <wandb-artifact>
+# Train tracking task from local motion file (recommended)
+./train.sh /path/to/motion.npz
+
+# Train tracking task from existing artifact (compatible with mjlab flow)
+./train.sh --registry-name <entity/project/artifact:latest>
 ```
+
+By default, Adam Pro runs log to W&B project `adam_pro_tasks`.
+You can still override project name via CLI (for example:
+`--agent.wandb_project <other_project>` when using registry mode).

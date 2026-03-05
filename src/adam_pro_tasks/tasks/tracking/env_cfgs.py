@@ -1,5 +1,7 @@
 """Adam Pro tracking environment configuration."""
 
+import os
+
 from mjlab.envs import ManagerBasedRlEnvCfg
 from mjlab.envs.mdp.actions import JointPositionActionCfg
 from mjlab.sensor import ContactMatch, ContactSensorCfg
@@ -14,6 +16,31 @@ from adam_pro_tasks.tasks.tracking.motion_io import (
   TRACKING_ANCHOR_BODY,
   TRACKING_BODY_NAMES,
 )
+
+ADAM_PRO_ACTION_RATE_L2_WEIGHT = -0.08
+
+ADAM_PRO_TRACKING_TERMINATION_THRESHOLDS: dict[str, float] = {
+  "anchor_pos": 0.35,
+  "ee_body_pos": 0.35,
+}
+
+ADAM_PRO_PLAY_SAMPLING_MODE_ENV_VAR = "ADAM_PRO_PLAY_SAMPLING_MODE"
+ADAM_PRO_PLAY_SAMPLING_MODE_DEFAULT = "uniform"
+ADAM_PRO_PLAY_SAMPLING_MODES = ("start", "uniform", "adaptive")
+
+
+def _resolve_play_sampling_mode() -> str:
+  mode = os.environ.get(
+    ADAM_PRO_PLAY_SAMPLING_MODE_ENV_VAR, ADAM_PRO_PLAY_SAMPLING_MODE_DEFAULT
+  )
+  resolved_mode = mode.strip().lower()
+  if resolved_mode not in ADAM_PRO_PLAY_SAMPLING_MODES:
+    allowed_modes = ", ".join(ADAM_PRO_PLAY_SAMPLING_MODES)
+    raise ValueError(
+      f"{ADAM_PRO_PLAY_SAMPLING_MODE_ENV_VAR} must be one of: {allowed_modes}; "
+      f"got: {mode!r}"
+    )
+  return resolved_mode
 
 
 def _policy_obs_group_name(cfg: ManagerBasedRlEnvCfg) -> str:
@@ -34,6 +61,21 @@ def _remap_base_imu_sensors(cfg: ManagerBasedRlEnvCfg) -> None:
       terms["base_lin_vel"].params["sensor_name"] = "robot/BodyVel"
     if "base_ang_vel" in terms:
       terms["base_ang_vel"].params["sensor_name"] = "robot/BodyGyro"
+
+
+def _apply_adam_pro_action_rate_override(cfg: ManagerBasedRlEnvCfg) -> None:
+  """Apply minimal R1 reward override for action-rate penalty."""
+  cfg.rewards["action_rate_l2"].weight = ADAM_PRO_ACTION_RATE_L2_WEIGHT
+
+
+def _apply_adam_pro_termination_overrides(cfg: ManagerBasedRlEnvCfg) -> None:
+  """Relax selected termination thresholds for Adam Pro morphology."""
+  cfg.terminations["anchor_pos"].params["threshold"] = (
+    ADAM_PRO_TRACKING_TERMINATION_THRESHOLDS["anchor_pos"]
+  )
+  cfg.terminations["ee_body_pos"].params["threshold"] = (
+    ADAM_PRO_TRACKING_TERMINATION_THRESHOLDS["ee_body_pos"]
+  )
 
 
 def adam_pro_flat_tracking_env_cfg(play: bool = False) -> ManagerBasedRlEnvCfg:
@@ -64,6 +106,8 @@ def adam_pro_flat_tracking_env_cfg(play: bool = False) -> ManagerBasedRlEnvCfg:
   motion_cmd.body_names = TRACKING_BODY_NAMES
 
   _remap_base_imu_sensors(cfg)
+  _apply_adam_pro_action_rate_override(cfg)
+  _apply_adam_pro_termination_overrides(cfg)
 
   cfg.events["foot_friction"].params[
     "asset_cfg"
@@ -86,6 +130,6 @@ def adam_pro_flat_tracking_env_cfg(play: bool = False) -> ManagerBasedRlEnvCfg:
     cfg.events.pop("push_robot", None)
     motion_cmd.pose_range = {}
     motion_cmd.velocity_range = {}
-    motion_cmd.sampling_mode = "start"
+    motion_cmd.sampling_mode = _resolve_play_sampling_mode()
 
   return cfg
